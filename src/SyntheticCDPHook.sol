@@ -8,8 +8,14 @@ import {PoolKey} from "v4-core/src/types/PoolKey.sol";
 import {PoolId, PoolIdLibrary} from "v4-core/src/types/PoolId.sol";
 import {BalanceDelta} from "v4-core/src/types/BalanceDelta.sol";
 import {BeforeSwapDelta, BeforeSwapDeltaLibrary} from "v4-core/src/types/BeforeSwapDelta.sol";
+import {IOracle} from "src/interface/IOracle.sol";
 
 contract SyntheticCDPHook is BaseHook {
+    IOracle public primaryOracle;
+    IOracle public secondaryOracle;
+    address public treasury;
+
+    mapping(PoolKey => string) public poolToSymbol;
 
     constructor(IPoolManager _poolManager) BaseHook(_poolManager) {
         // TODO
@@ -32,6 +38,18 @@ contract SyntheticCDPHook is BaseHook {
             afterAddLiquidityReturnDelta: false,
             afterRemoveLiquidityReturnDelta: false
         });
+    }
+
+  function beforeInitialize(address sender, PoolKey calldata key, uint160 sqrtPriceX96, bytes calldata hookData)
+        external
+        override
+        returns (bytes4)
+    {
+        (string memory symbol, string memory tokenName, string memory tokenSymbol) = abi.decode(hookData, (string, string, string));
+        poolToSymbol[key] = symbol;
+        // RWAToken newToken = new RWAToken(tokenName, tokenSymbol);
+        // poolToRWAToken[key] = newToken;
+        return BaseHook.beforeInitialize.selector;
     }
 
     function beforeSwap(address, PoolKey calldata key, IPoolManager.SwapParams calldata, bytes calldata)

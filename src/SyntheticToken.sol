@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity ^0.8.26;
 
-contract RWAToken is ERC20 {
+import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+
+contract SyntheticToken is ERC20 {
     address public minter;
 
     constructor(string memory name, string memory symbol) ERC20(name, symbol) {

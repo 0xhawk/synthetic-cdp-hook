@@ -17,6 +17,7 @@ import {Hooks} from "v4-core/src/libraries/Hooks.sol";
 import {CurrencyLibrary, Currency} from "v4-core/src/types/Currency.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {SyntheticCDPHook} from "../src/SyntheticCDPHook.sol";
+import {SyntheticToken} from "../src/SyntheticToken.sol";
 
 contract SyntheticCDPHookTest is Test, Deployers {
     SyntheticCDPHook public hook;
@@ -34,18 +35,19 @@ contract SyntheticCDPHookTest is Test, Deployers {
         address hookAddress = address(
             uint160(
                 Hooks.BEFORE_INITIALIZE_FLAG |
+                    Hooks.BEFORE_ADD_LIQUIDITY_FLAG |
                     Hooks.BEFORE_SWAP_FLAG
             )
         );
 
         IERC20[] memory _pooledTokens = new IERC20[](2);
 
-        _pooledTokens[0] =  IERC20(Currency.unwrap(currency0));
-        _pooledTokens[1] =  IERC20(Currency.unwrap(currency1));
+        _pooledTokens[0] = IERC20(Currency.unwrap(currency0));
+        _pooledTokens[1] = IERC20(Currency.unwrap(currency1));
 
         uint8[] memory _decimals = new uint8[](2);
         _decimals[0] = uint8(18);
-        _decimals[1]  = uint8(18);
+        _decimals[1] = uint8(18);
 
         deployCodeTo(
             "SyntheticCDPHook.sol:SyntheticCDPHook",
@@ -72,26 +74,46 @@ contract SyntheticCDPHookTest is Test, Deployers {
             hooks: IHooks(address(hook))
         });
 
-        //     string memory dataKey = "ETH_USD";
-        //     string memory tokenName = "Synthetic ETH/USD";
-        //     string memory tokenSymbol = "sETHUSD";
-        //     uint160 sqrtPriceX96 = 1 << 96; // 1.0 as Q64.96
+        string memory dataKey = "Memecoin Index";
+        string memory tokenName = "Memecoin Index";
+        string memory tokenSymbol = "MEME";
+        uint160 sqrtPriceX96 = 1 << 96; // 1.0 as Q64.96
+        bytes memory hookData = abi.encode(dataKey, tokenName, tokenSymbol);
 
-        //     bytes memory hookData = abi.encode(dataKey, tokenName, tokenSymbol);
+        bytes4 returnValue = hook.beforeInitialize(
+            address(this),
+            key,
+            sqrtPriceX96,
+            hookData
+        );
+        assertEq(
+            returnValue,
+            SyntheticCDPHook.beforeInitialize.selector,
+            "Incorrect return value"
+        );
 
-        //     bytes4 returnValue = hook.beforeInitialize(address(this), key, sqrtPriceX96, hookData);
+        bytes32 encodedKey = keccak256(abi.encode(key));
+        assertEq(
+            hook.poolToDataKey(encodedKey),
+            dataKey,
+            "Data key not set correctly"
+        );
 
-        //     assertEq(returnValue, SyntheticCDPHook.beforeInitialize.selector, "Incorrect return value");
+        address syntheticTokenAddress = address(
+            hook.poolToSyntheticToken(encodedKey)
+        );
+        assertTrue(
+            syntheticTokenAddress != address(0),
+            "Synthetic token not created"
+        );
 
-        //     bytes32 encodedKey = keccak256(abi.encode(key));
-        //     assertEq(hook.poolToDataKey(encodedKey), dataKey, "Data key not set correctly");
-
-        //     address syntheticTokenAddress = address(hook.poolToSyntheticToken(encodedKey));
-        //     assertTrue(syntheticTokenAddress != address(0), "Synthetic token not created");
-
-        //     SyntheticToken syntheticToken = SyntheticToken(syntheticTokenAddress);
-        //     assertEq(syntheticToken.name(), tokenName, "Incorrect token name");
-        //     assertEq(syntheticToken.symbol(), tokenSymbol, "Incorrect token symbol");
+        SyntheticToken syntheticToken = SyntheticToken(syntheticTokenAddress);
+        assertEq(syntheticToken.name(), tokenName, "Incorrect token name");
+        assertEq(
+            syntheticToken.symbol(),
+            tokenSymbol,
+            "Incorrect token symbol"
+        );
     }
 
     // function testBeforeInitializeWithInvalidData() public {

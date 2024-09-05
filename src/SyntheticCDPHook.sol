@@ -28,7 +28,7 @@ contract SyntheticCDPHook is BaseHook {
         return Hooks.Permissions({
             beforeInitialize: true,
             afterInitialize: false,
-            beforeAddLiquidity: false,
+            beforeAddLiquidity: true,
             afterAddLiquidity: false,
             beforeRemoveLiquidity: false,
             afterRemoveLiquidity: false,
@@ -56,6 +56,16 @@ contract SyntheticCDPHook is BaseHook {
         return BaseHook.beforeInitialize.selector;
     }
 
+    function beforeAddLiquidity(
+        address,
+        PoolKey calldata key,
+        IPoolManager.ModifyLiquidityParams calldata,
+        bytes calldata
+    ) external override returns (bytes4) {
+        return BaseHook.beforeAddLiquidity.selector;
+    }
+
+
     function beforeSwap(address, PoolKey calldata key, IPoolManager.SwapParams calldata, bytes calldata)
         external
         override
@@ -63,15 +73,6 @@ contract SyntheticCDPHook is BaseHook {
     {
         return (BaseHook.beforeSwap.selector, BeforeSwapDeltaLibrary.ZERO_DELTA, 0);
     }
-
-    // function beforeAddLiquidity(
-    //     address,
-    //     PoolKey calldata key,
-    //     IPoolManager.ModifyLiquidityParams calldata,
-    //     bytes calldata
-    // ) external override returns (bytes4) {
-    //     return BaseHook.beforeAddLiquidity.selector;
-    // }
 
     // function beforeRemoveLiquidity(
     //     address,

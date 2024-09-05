@@ -26,14 +26,14 @@ contract SyntheticCDPHook is BaseHook {
 
     function getHookPermissions() public pure override returns (Hooks.Permissions memory) {
         return Hooks.Permissions({
-            beforeInitialize: false,
+            beforeInitialize: true,
             afterInitialize: false,
-            beforeAddLiquidity: true,
+            beforeAddLiquidity: false,
             afterAddLiquidity: false,
-            beforeRemoveLiquidity: true,
+            beforeRemoveLiquidity: false,
             afterRemoveLiquidity: false,
             beforeSwap: true,
-            afterSwap: true,
+            afterSwap: false,
             beforeDonate: false,
             afterDonate: false,
             beforeSwapReturnDelta: false,
@@ -64,29 +64,21 @@ contract SyntheticCDPHook is BaseHook {
         return (BaseHook.beforeSwap.selector, BeforeSwapDeltaLibrary.ZERO_DELTA, 0);
     }
 
-    function afterSwap(address, PoolKey calldata key, IPoolManager.SwapParams calldata, BalanceDelta, bytes calldata)
-        external
-        override
-        returns (bytes4, int128)
-    {
-        return (BaseHook.afterSwap.selector, 0);
-    }
+    // function beforeAddLiquidity(
+    //     address,
+    //     PoolKey calldata key,
+    //     IPoolManager.ModifyLiquidityParams calldata,
+    //     bytes calldata
+    // ) external override returns (bytes4) {
+    //     return BaseHook.beforeAddLiquidity.selector;
+    // }
 
-    function beforeAddLiquidity(
-        address,
-        PoolKey calldata key,
-        IPoolManager.ModifyLiquidityParams calldata,
-        bytes calldata
-    ) external override returns (bytes4) {
-        return BaseHook.beforeAddLiquidity.selector;
-    }
-
-    function beforeRemoveLiquidity(
-        address,
-        PoolKey calldata key,
-        IPoolManager.ModifyLiquidityParams calldata,
-        bytes calldata
-    ) external override returns (bytes4) {
-        return BaseHook.beforeRemoveLiquidity.selector;
-    }
+    // function beforeRemoveLiquidity(
+    //     address,
+    //     PoolKey calldata key,
+    //     IPoolManager.ModifyLiquidityParams calldata,
+    //     bytes calldata
+    // ) external override returns (bytes4) {
+    //     return BaseHook.beforeRemoveLiquidity.selector;
+    // }
 }

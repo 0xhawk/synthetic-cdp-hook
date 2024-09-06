@@ -65,8 +65,8 @@ contract SyntheticCDPHookTest is Test, Deployers {
     }
 
     function testBeforeInitialize() public {
-        address currency0 = address(0x1);
-        address currency1 = address(0x2);
+        address currency0 = address(0x1); // Synthetic Token
+        address currency1 = address(0x2); // Collateral Token
         uint24 fee = 3000;
         int24 tickSpacing = 60;
 
@@ -86,6 +86,7 @@ contract SyntheticCDPHookTest is Test, Deployers {
 
         manager.initialize(key, sqrtPriceX96, hookData);
 
+        key.currency0 = Currency.wrap(0x732bBC31486A07346ec15afc74402FEE028527c4);
         PoolId poolId = key.toId();
         assertEq(
             hook.poolToDataKey(poolId),

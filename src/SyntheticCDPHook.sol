@@ -29,7 +29,8 @@ contract SyntheticCDPHook is BaseHook {
         PoolId indexed poolId,
         string dataKey,
         string tokenName,
-        string tokenSymbol
+        string tokenSymbol,
+        address tokenAddress
     );
     event CollateralDeposited(
         address indexed user,
@@ -77,11 +78,16 @@ contract SyntheticCDPHook is BaseHook {
             string memory tokenName,
             string memory tokenSymbol
         ) = abi.decode(hookData, (string, string, string));
-        PoolId poolId = key.toId();
-        poolToDataKey[poolId] = dataKey;
+        // Token Factory
         SyntheticToken newToken = new SyntheticToken(tokenName, tokenSymbol);
+        // Replace
+        PoolKey memory _key = key;
+        _key.currency0 = Currency.wrap(address(newToken));
+        
+        PoolId poolId = _key.toId();
+        poolToDataKey[poolId] = dataKey;
         poolToSyntheticToken[poolId] = newToken;
-        emit SyntheticTokenCreated(poolId, dataKey, tokenName, tokenSymbol);
+        emit SyntheticTokenCreated(poolId, dataKey, tokenName, tokenSymbol, address(newToken));
         return BaseHook.beforeInitialize.selector;
     }
 

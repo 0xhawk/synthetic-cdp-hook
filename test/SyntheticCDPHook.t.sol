@@ -18,8 +18,11 @@ import {CurrencyLibrary, Currency} from "v4-core/src/types/Currency.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {SyntheticCDPHook} from "../src/SyntheticCDPHook.sol";
 import {SyntheticToken} from "../src/SyntheticToken.sol";
+import {PoolId, PoolIdLibrary} from "v4-core/src/types/PoolId.sol";
 
 contract SyntheticCDPHookTest is Test, Deployers {
+    using PoolIdLibrary for PoolKey;
+
     SyntheticCDPHook public hook;
     address public deployer = address(11);
 
@@ -28,6 +31,7 @@ contract SyntheticCDPHookTest is Test, Deployers {
         vm.startPrank(deployer);
 
         deployFreshManagerAndRouters();
+
         (currency0, currency1) = deployMintAndApprove2Currencies();
         vm.label(Currency.unwrap(key.currency0), "ERC20-C0");
         vm.label(Currency.unwrap(key.currency1), "ERC20-C1");
@@ -74,33 +78,23 @@ contract SyntheticCDPHookTest is Test, Deployers {
             hooks: IHooks(address(hook))
         });
 
-        string memory dataKey = "Memecoin Index";
+        string memory dataKey = "MemecoinIndex-1725612649";
         string memory tokenName = "Memecoin Index";
         string memory tokenSymbol = "MEME";
         uint160 sqrtPriceX96 = 1 << 96; // 1.0 as Q64.96
         bytes memory hookData = abi.encode(dataKey, tokenName, tokenSymbol);
 
-        bytes4 returnValue = hook.beforeInitialize(
-            address(this),
-            key,
-            sqrtPriceX96,
-            hookData
-        );
-        assertEq(
-            returnValue,
-            SyntheticCDPHook.beforeInitialize.selector,
-            "Incorrect return value"
-        );
+        manager.initialize(key, sqrtPriceX96, hookData);
 
-        bytes32 encodedKey = keccak256(abi.encode(key));
+        PoolId poolId = key.toId();
         assertEq(
-            hook.poolToDataKey(encodedKey),
+            hook.poolToDataKey(poolId),
             dataKey,
             "Data key not set correctly"
         );
 
         address syntheticTokenAddress = address(
-            hook.poolToSyntheticToken(encodedKey)
+            hook.poolToSyntheticToken(poolId)
         );
         assertTrue(
             syntheticTokenAddress != address(0),

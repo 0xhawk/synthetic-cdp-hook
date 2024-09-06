@@ -78,16 +78,18 @@ contract SyntheticCDPHook is BaseHook {
             string memory tokenName,
             string memory tokenSymbol
         ) = abi.decode(hookData, (string, string, string));
-        // Token Factory
-        SyntheticToken newToken = new SyntheticToken(tokenName, tokenSymbol);
-        // Replace
-        PoolKey memory _key = key;
-        _key.currency0 = Currency.wrap(address(newToken));
-        
-        PoolId poolId = _key.toId();
+        PoolId poolId = key.toId();
         poolToDataKey[poolId] = dataKey;
-        poolToSyntheticToken[poolId] = newToken;
-        emit SyntheticTokenCreated(poolId, dataKey, tokenName, tokenSymbol, address(newToken));
+        poolToSyntheticToken[poolId] = SyntheticToken(
+            Currency.unwrap(key.currency0)
+        );
+        emit SyntheticTokenCreated(
+            poolId,
+            dataKey,
+            tokenName,
+            tokenSymbol,
+            Currency.unwrap(key.currency0)
+        );
         return BaseHook.beforeInitialize.selector;
     }
 
@@ -101,9 +103,10 @@ contract SyntheticCDPHook is BaseHook {
         if (params.liquidityDelta > 0) {
             // Depositing collateral
             uint256 collateralAmount = abi.decode(hookData, (uint256));
+            poolToSyntheticToken[poolId].mint(address(this), collateralAmount);
             collateralDeposits[sender][poolId] += collateralAmount;
             require(
-                IERC20(Currency.unwrap(key.currency0)).transferFrom(
+                IERC20(Currency.unwrap(key.currency1)).transferFrom(
                     sender,
                     address(this),
                     collateralAmount
@@ -129,13 +132,4 @@ contract SyntheticCDPHook is BaseHook {
             0
         );
     }
-
-    // function beforeRemoveLiquidity(
-    //     address,
-    //     PoolKey calldata key,
-    //     IPoolManager.ModifyLiquidityParams calldata,
-    //     bytes calldata
-    // ) external override returns (bytes4) {
-    //     return BaseHook.beforeRemoveLiquidity.selector;
-    // }
 }

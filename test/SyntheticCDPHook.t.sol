@@ -18,23 +18,32 @@ import {CurrencyLibrary, Currency} from "v4-core/src/types/Currency.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {SyntheticCDPHook} from "../src/SyntheticCDPHook.sol";
 import {SyntheticToken} from "../src/SyntheticToken.sol";
+import {TestToken} from "../src/test/TestToken.sol";
 import {PoolId, PoolIdLibrary} from "v4-core/src/types/PoolId.sol";
+import {PoolTestBase} from "v4-core/src/test/PoolTestBase.sol";
 
 contract SyntheticCDPHookTest is Test, Deployers {
     using PoolIdLibrary for PoolKey;
 
     SyntheticCDPHook public hook;
     address public deployer = address(11);
+    TestToken collateralToken;
+    SyntheticToken syntheticToken;
+
+    struct CallbackData {
+        address sender;
+        PoolKey key;
+        IPoolManager.ModifyLiquidityParams params;
+        bytes hookData;
+        bool settleUsingBurn;
+        bool takeClaims;
+    }
 
     function setUp() public {
         vm.label(deployer, "Deployer");
         vm.startPrank(deployer);
 
         deployFreshManagerAndRouters();
-
-        (currency0, currency1) = deployMintAndApprove2Currencies();
-        vm.label(Currency.unwrap(key.currency0), "ERC20-C0");
-        vm.label(Currency.unwrap(key.currency1), "ERC20-C1");
 
         address hookAddress = address(
             uint160(
@@ -44,15 +53,6 @@ contract SyntheticCDPHookTest is Test, Deployers {
             )
         );
 
-        IERC20[] memory _pooledTokens = new IERC20[](2);
-
-        _pooledTokens[0] = IERC20(Currency.unwrap(currency0));
-        _pooledTokens[1] = IERC20(Currency.unwrap(currency1));
-
-        uint8[] memory _decimals = new uint8[](2);
-        _decimals[0] = uint8(18);
-        _decimals[1] = uint8(18);
-
         deployCodeTo(
             "SyntheticCDPHook.sol:SyntheticCDPHook",
             abi.encode(manager),
@@ -61,22 +61,15 @@ contract SyntheticCDPHookTest is Test, Deployers {
 
         hook = SyntheticCDPHook(hookAddress);
 
+        collateralToken = new TestToken("USDC", "USDC");
+        collateralToken.mint(address(this), 30000);
+        syntheticToken = new SyntheticToken("Memecoin Index", "MEME", address(hook));
+
         vm.stopPrank();
     }
 
     function testBeforeInitialize() public {
-        address currency0 = address(0x1); // Synthetic Token
-        address currency1 = address(0x2); // Collateral Token
-        uint24 fee = 3000;
-        int24 tickSpacing = 60;
-
-        PoolKey memory key = PoolKey({
-            currency0: Currency.wrap(currency0),
-            currency1: Currency.wrap(currency1),
-            fee: fee,
-            tickSpacing: tickSpacing,
-            hooks: IHooks(address(hook))
-        });
+        PoolKey memory key = defaultPool();
 
         string memory dataKey = "MemecoinIndex-1725612649";
         string memory tokenName = "Memecoin Index";
@@ -86,7 +79,9 @@ contract SyntheticCDPHookTest is Test, Deployers {
 
         manager.initialize(key, sqrtPriceX96, hookData);
 
-        key.currency0 = Currency.wrap(0x732bBC31486A07346ec15afc74402FEE028527c4);
+        // key.currency0 = Currency.wrap(
+        //     0x732bBC31486A07346ec15afc74402FEE028527c4
+        // );
         PoolId poolId = key.toId();
         assertEq(
             hook.poolToDataKey(poolId),
@@ -111,51 +106,68 @@ contract SyntheticCDPHookTest is Test, Deployers {
         );
     }
 
-    // function testBeforeInitializeWithInvalidData() public {
-    //     PoolKey memory key = PoolKey({
-    //         currency0: Currency.wrap(address(0x1)),
-    //         currency1: Currency.wrap(address(0x2)),
-    //         fee: 3000,
-    //         tickSpacing: 60,
-    //         hooks: IHooks(address(hook))
-    //     });
+    function testBeforeAddLiquidity() public {
+        PoolKey memory key = defaultPool();
 
-    //     bytes memory invalidHookData = abi.encode("Invalid Data");
+        string memory dataKey = "MemecoinIndex-1725612649";
+        string memory tokenName = "Memecoin Index";
+        string memory tokenSymbol = "MEME";
+        uint160 sqrtPriceX96 = 1 << 96; // 1.0 as Q64.96
+        manager.initialize(
+            key,
+            sqrtPriceX96,
+            abi.encode(dataKey, tokenName, tokenSymbol)
+        );
 
-    //     vm.expectRevert(); // Expect the function to revert due to invalid data
-    //     hook.beforeInitialize(address(this), key, 1 << 96, invalidHookData);
-    // }
+        // prepare test token
+        collateralToken.approve(address(hook), 10000);
 
-    // function testBeforeInitializeMultiplePools() public {
-    //     PoolKey memory key1 = PoolKey({
-    //         currency0: Currency.wrap(address(0x1)),
-    //         currency1: Currency.wrap(address(0x2)),
-    //         fee: 3000,
-    //         tickSpacing: 60,
-    //         hooks: IHooks(address(hook))
-    //     });
+        bytes memory hookData = abi.encode(300);
 
-    //     PoolKey memory key2 = PoolKey({
-    //         currency0: Currency.wrap(address(0x3)),
-    //         currency1: Currency.wrap(address(0x4)),
-    //         fee: 500,
-    //         tickSpacing: 10,
-    //         hooks: IHooks(address(hook))
-    //     });
+        BalanceDelta delta = abi.decode(
+            manager.unlock(
+                abi.encode(
+                    CallbackData(
+                        msg.sender,
+                        key,
+                        LIQUIDITY_PARAMS,
+                        hookData,
+                        false,
+                        false
+                    )
+                )
+            ),
+            (BalanceDelta)
+        );
+    }
 
-    //     bytes memory hookData1 = abi.encode("ETH_USD", "Synthetic ETH/USD", "sETHUSD");
-    //     bytes memory hookData2 = abi.encode("BTC_USD", "Synthetic BTC/USD", "sBTCUSD");
+    function unlockCallback(
+        bytes calldata rawData
+    ) external returns (bytes memory) {
+        require(msg.sender == address(manager));
 
-    //     hook.beforeInitialize(address(this), key1, 1 << 96, hookData1);
-    //     hook.beforeInitialize(address(this), key2, 1 << 96, hookData2);
+        CallbackData memory data = abi.decode(rawData, (CallbackData));
+        (BalanceDelta delta, ) = manager.modifyLiquidity(
+            data.key,
+            data.params,
+            data.hookData
+        );
+        return abi.encode(delta);
+    }
 
-    //     bytes32 encodedKey1 = keccak256(abi.encode(key1));
-    //     bytes32 encodedKey2 = keccak256(abi.encode(key2));
+    function defaultPool() internal returns (PoolKey memory key) {
+        address currency0 = address(syntheticToken); // Synthetic Token
+        address currency1 = address(collateralToken); // Collateral Token
+        uint24 fee = 3000;
+        int24 tickSpacing = 60;
 
-    //     assertEq(hook.poolToDataKey(encodedKey1), "ETH_USD", "Data key for pool 1 not set correctly");
-    //     assertEq(hook.poolToDataKey(encodedKey2), "BTC_USD", "Data key for pool 2 not set correctly");
-
-    //     assertTrue(address(hook.poolToSyntheticToken(encodedKey1)) != address(0), "Synthetic token for pool 1 not created");
-    //     assertTrue(address(hook.poolToSyntheticToken(encodedKey2)) != address(0), "Synthetic token for pool 2 not created");
-    // }
+        return
+            PoolKey({
+                currency0: Currency.wrap(currency0),
+                currency1: Currency.wrap(currency1),
+                fee: fee,
+                tickSpacing: tickSpacing,
+                hooks: IHooks(address(hook))
+            });
+    }
 }
